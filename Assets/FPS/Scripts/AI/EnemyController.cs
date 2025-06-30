@@ -2,6 +2,7 @@ using System.Collections.Generic;
 using Unity.FPS.Game;
 using UnityEngine;
 using UnityEngine.Events;
+using UnityEngine.AI;
 
 namespace Unity.FPS.AI
 {
@@ -19,7 +20,7 @@ namespace Unity.FPS.AI
         }
     }
 
-    // Enemy를 관리하는 클래스
+    // Enemy Health, Patrol 데이터를 관리하는 클래스
     [RequireComponent(typeof(Health))]
     public class EnemyController : MonoBehaviour
     {
@@ -48,6 +49,18 @@ namespace Unity.FPS.AI
 
         private float lastTimeDamaged = float.NegativeInfinity;
         private bool wasDamagedThisFrame = false;
+
+        // Patrol
+        private int pathDestinationNodeIndex;               // 이동할 목표 노드 인덱스
+        [SerializeField]
+        private float pathReachingRadius = 1f;             // 도착 체크 범위
+        #endregion
+
+        #region Property
+        // Patrol
+        public NavMeshAgent Agent { get; private set; }
+        // 패트롤 할 path - enemy가 등록되어 있는 path
+        public PatrolPath patrolPath { get; set; }
         #endregion
 
         #region Unity Event Method
@@ -55,6 +68,7 @@ namespace Unity.FPS.AI
         {
             // 참조
             health = this.GetComponent<Health>();
+            Agent = this.GetComponent<NavMeshAgent>();
         }
 
         private void Start()
@@ -126,6 +140,90 @@ namespace Unity.FPS.AI
             Destroy(effectGo, 5f);
 
             // ...
+        }
+
+        // 패트롤 path 유효 여부 체크
+        private bool IsPathValid()
+        {
+            return patrolPath && patrolPath.pathNodes.Count > 0;
+        }
+
+        // 패트롤 path 목표 노드 리셋
+        private void ResetPathDestination()
+        {
+            pathDestinationNodeIndex = 0;
+        }
+
+        // 현재 위치에서 가장 가까운 노드 구해서 목표 노드 설정
+        private void SetPathDestinationToClosestNode()
+        {
+            // 패스 체크
+            if(IsPathValid() == false)
+            {
+                ResetPathDestination();
+                return;
+            }
+
+            int closestPathNodeIndex = 0;
+            float closerDistance = float.PositiveInfinity;
+            for (int i = 0; i < patrolPath.pathNodes.Count; i++)
+            {
+                float distance = patrolPath.GetDistanceToNode(transform.position, i);
+                if(distance < closerDistance)
+                {
+                    closerDistance = distance;
+                    closestPathNodeIndex = i;
+                }
+            }
+
+            pathDestinationNodeIndex = closestPathNodeIndex;
+        }
+
+        // 이동할 목표 위치 구하기
+        public Vector3 GetDestinationOnPath()
+        {
+            // 패스 체크
+            if(IsPathValid() == false)
+            {
+                return this.transform.position;
+            }
+
+            return patrolPath.GetPositionPathNode(pathDestinationNodeIndex);
+        }
+
+        // Agent 이동 목표 설정하기
+        public void SetMaxDestination(Vector3 destination)
+        {
+            // Agent 체크
+            if (Agent == null)
+                return;
+
+            Agent.SetDestination(destination);
+        }
+
+        // 도착 체크 및 다음 목표 지점 설정하기 - 매개 변수로 패트롤 방향(오름차순, 내림차순) 설정
+        public void UpdatePathDestination(bool inverseOrder = false)
+        {
+            // 패스 체크
+            if (IsPathValid() == false)
+                return;
+
+            // 도착 판정
+            float distance = (transform.position - GetDestinationOnPath()).magnitude;
+            if(distance < pathReachingRadius)
+            {
+                // 도착했으면 다음 목표 인덱스 설정
+                pathDestinationNodeIndex = inverseOrder ? pathDestinationNodeIndex - 1 : pathDestinationNodeIndex + 1;
+                // pathDestinationNodeIndex가 범위를 벗어났을 때 처리
+                if(pathDestinationNodeIndex < 0)
+                {
+                    pathDestinationNodeIndex += patrolPath.pathNodes.Count;
+                }
+                if(pathDestinationNodeIndex >= patrolPath.pathNodes.Count)
+                {
+                    pathDestinationNodeIndex -= patrolPath.pathNodes.Count;
+                }
+            }
         }
         #endregion
     }
