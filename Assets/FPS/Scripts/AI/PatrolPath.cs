@@ -60,7 +60,7 @@ namespace Unity.FPS.AI
         }
 
         // 지정된 노드의 위치 구하기
-        public Vector3 GetPositionPathNode(int targetNodeIndex)
+        public Vector3 GetPositionOfPathNode(int targetNodeIndex)
         {
             // targetNodeIndex 체크
             if (targetNodeIndex < 0 || targetNodeIndex >= pathNodes.Count

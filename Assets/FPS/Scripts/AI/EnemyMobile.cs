@@ -1,5 +1,5 @@
-using Unity.FPS.Game;
 using UnityEngine;
+using Unity.FPS.Game;
 
 namespace Unity.FPS.AI
 {
@@ -54,14 +54,25 @@ namespace Unity.FPS.AI
             // 초기화
             aiState = AIState.Patrol;
 
-            // onDamaged 이벤트 함수에 등록
+            // 사운드
+            audioSource.clip = moveSound;
+            audioSource.Play();
+
+            // enemyController 이벤트 함수에 등록
             enemyController.onDamaged += OnDamaged;
+            enemyController.onDetectedTarget += OnDetectedTarget;
+            enemyController.onLostTarget += OnLostTarget;
         }
 
         private void Update()
         {
             // 적 상태 구현
             UpdateCurrentAiState();
+
+            // 이동 속도에 따른 애니, 사운드 재생 속도 설정
+            float moveSpeed = enemyController.Agent.velocity.magnitude;
+            animator.SetFloat(k_AnimMoveSpeedParameter, moveSpeed);
+            audioSource.pitch = pitchMovementSpeed.GetValueRatio(moveSpeed / enemyController.Agent.speed);
         }
         #endregion
 
@@ -71,6 +82,8 @@ namespace Unity.FPS.AI
             switch(aiState)
             {
                 case AIState.Patrol:
+                    enemyController.UpdatePathDestination(true);                                    // 노드 도착 체크 및 다음 목표 노드 설정
+                    enemyController.SetNavDestination(enemyController.GetDestinationOnPath());      // 이동할 목표 위치를 구해 Agent 이동 위치 설정
                     break;
 
                 case AIState.Follow:
@@ -93,6 +106,17 @@ namespace Unity.FPS.AI
 
             // 애니메이션
             animator.SetTrigger(k_AnimOnDamagedParameter);
+        }
+        
+        // 적을 찾으면 호출되는 함수
+        private void OnDetectedTarget()
+        {
+            Debug.Log("적을 찾았다 - 추격 시작");
+        }
+
+        private void OnLostTarget()
+        {
+            Debug.Log("적을 잃어버렸다 - 패트롤로 다시 가기");
         }
         #endregion
     }

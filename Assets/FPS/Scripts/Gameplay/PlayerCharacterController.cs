@@ -1,4 +1,4 @@
-﻿using Unity.FPS.Game;
+using Unity.FPS.Game;
 using UnityEngine;
 using UnityEngine.Events;
 
@@ -129,7 +129,12 @@ namespace Unity.FPS.Gameplay
 
         void Awake()
         {
-            
+            // ActorManager에 플레이어 등록
+            ActorManager actorManager = FindFirstObjectByType<ActorManager>();
+            if(actorManager)
+            {
+                actorManager.SetPlayer(this.gameObject);
+            }
         }
 
         void Start()

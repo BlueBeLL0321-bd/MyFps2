@@ -28,6 +28,9 @@ namespace Unity.FPS.AI
         // 참조
         private Health health;
 
+        private Actor actor;
+        private Collider[] selfColliders;
+
         public GameObject deathVfxPrefab;
         public Transform deathVfxSpawnPosition;
 
@@ -53,7 +56,22 @@ namespace Unity.FPS.AI
         // Patrol
         private int pathDestinationNodeIndex;               // 이동할 목표 노드 인덱스
         [SerializeField]
-        private float pathReachingRadius = 1f;             // 도착 체크 범위
+        private float pathReachingRadius = 1f;              // 도착 체크 범위
+
+        // Detection
+        public Material eyeColorMaterial;
+        [ColorUsage(true, true)]
+        public Color defaultEyeColor;
+        [ColorUsage(true, true)]
+        public Color attackEyeColor;
+
+        private RendererIndexData eyeRendererData;
+        private MaterialPropertyBlock eyeColorMaterialPropertyBlock;
+
+        // 디텍팅 하는 순간 등록된 함수 호출하는 이벤트 함수
+        public UnityAction onDetectedTarget;
+        // 적을 잃어버리는 순간 등록된 함수 호출하는 이벤트 함수
+        public UnityAction onLostTarget;
         #endregion
 
         #region Property
@@ -61,6 +79,12 @@ namespace Unity.FPS.AI
         public NavMeshAgent Agent { get; private set; }
         // 패트롤 할 path - enemy가 등록되어 있는 path
         public PatrolPath patrolPath { get; set; }
+
+        // detection
+        public DetectionModule detectionModule { get; private set; }
+        public GameObject KnownDetectedTarget => detectionModule.KnownDetectedTarget;
+        public bool HadKnownTarget => detectionModule.HadKnownTarget;
+        public bool IsSeeingTarget => detectionModule.IsSeeingTarget;
         #endregion
 
         #region Unity Event Method
@@ -69,33 +93,66 @@ namespace Unity.FPS.AI
             // 참조
             health = this.GetComponent<Health>();
             Agent = this.GetComponent<NavMeshAgent>();
+
+            actor = this.GetComponent<Actor>();
+            selfColliders = GetComponentsInChildren<Collider>();
+
+            var detectionModules = GetComponentsInChildren<DetectionModule>();
+            detectionModule = detectionModules[0];
         }
 
         private void Start()
         {
+            // 초기화
+            pathDestinationNodeIndex = 0;
+
             // health 이벤트 함수 등록
             health.OnDamaged += OnDamaged;
             health.OnDie += OnDie;
+
+            // detectionModule 이벤트 함수 등록
+            detectionModule.onDetectedTarget += OnDetectedTarget;
+            detectionModule.onLostTarget += OnLostTarget;
 
             // body Material 가져오기
             foreach (var renderer in GetComponentsInChildren<Renderer>(true))
             {
                 for (int i = 0; i < renderer.sharedMaterials.Length; i++)
                 {
+                    // body 매터리얼 가져오기
                     if (renderer.sharedMaterials[i] == bodyMaterial)
                     {
                         // 리스트에 렌더러와 매터리얼 인덱스를 구조체 형식으로 저장
                         bodyRenderers.Add(new RendererIndexData(renderer, i));
+                    }
+
+                    // eye 매터리얼 가져오기
+                    if (renderer.sharedMaterials[i] == eyeColorMaterial)
+                    {
+                        eyeRendererData = new RendererIndexData(renderer, i);
                     }
                 }
             }
 
             // 매터리얼 속성 변경을 위한 MaterialPropertyBlock 객체 만들기
             bodyFlashMaterialPropertyBlock = new MaterialPropertyBlock();
+
+            // eye 렌더러 데이터가 생성되어 있으면
+            if(eyeRendererData.renderer != null)
+            {
+                // eye 매터리얼 속성 변경을 위한 MaterialPropertyBlock 객체 만들기
+                eyeColorMaterialPropertyBlock = new MaterialPropertyBlock();
+                // eye 컬러를 기본값으로 변경
+                eyeColorMaterialPropertyBlock.SetColor("_EmissionColor", defaultEyeColor);
+                eyeRendererData.renderer.SetPropertyBlock(eyeColorMaterialPropertyBlock, eyeRendererData.materialIndex);
+            }
         }
 
         private void Update()
         {
+            // 적 디텍팅
+            detectionModule.HandleTargetDetection(actor, selfColliders);
+
             // 대미지 컬러 효과
             Color currentColor = onHitBodyGradient.Evaluate((Time.time - lastTimeDamaged) / flashOnHitDuration);
             // 매터리얼 속성 변경 내용
@@ -188,11 +245,11 @@ namespace Unity.FPS.AI
                 return this.transform.position;
             }
 
-            return patrolPath.GetPositionPathNode(pathDestinationNodeIndex);
+            return patrolPath.GetPositionOfPathNode(pathDestinationNodeIndex);
         }
 
         // Agent 이동 목표 설정하기
-        public void SetMaxDestination(Vector3 destination)
+        public void SetNavDestination(Vector3 destination)
         {
             // Agent 체크
             if (Agent == null)
@@ -210,7 +267,7 @@ namespace Unity.FPS.AI
 
             // 도착 판정
             float distance = (transform.position - GetDestinationOnPath()).magnitude;
-            if(distance < pathReachingRadius)
+            if(distance <= pathReachingRadius)
             {
                 // 도착했으면 다음 목표 인덱스 설정
                 pathDestinationNodeIndex = inverseOrder ? pathDestinationNodeIndex - 1 : pathDestinationNodeIndex + 1;
@@ -223,6 +280,32 @@ namespace Unity.FPS.AI
                 {
                     pathDestinationNodeIndex -= patrolPath.pathNodes.Count;
                 }
+            }
+        }
+
+        // 적을 찾으면 호출되는 함수
+        private void OnDetectedTarget()
+        {
+            onDetectedTarget?.Invoke();
+
+            // eye 매터리얼 변경
+            if (eyeRendererData.renderer != null)
+            {
+                eyeColorMaterialPropertyBlock.SetColor("_EmissionColor", attackEyeColor);
+                eyeRendererData.renderer.SetPropertyBlock(eyeColorMaterialPropertyBlock, eyeRendererData.materialIndex);
+            }
+        }
+
+        // 적을 잃어버리면 호출되는 함수
+        private void OnLostTarget()
+        {
+            onLostTarget?.Invoke();
+
+            // eye 매터리얼 디폴트로 변경
+            if (eyeRendererData.renderer != null)
+            {
+                eyeColorMaterialPropertyBlock.SetColor("_EmissionColor", defaultEyeColor);
+                eyeRendererData.renderer.SetPropertyBlock(eyeColorMaterialPropertyBlock, eyeRendererData.materialIndex);
             }
         }
         #endregion
