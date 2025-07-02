@@ -1,5 +1,7 @@
-using UnityEngine;
+using TMPro;
 using Unity.FPS.Game;
+using Unity.VisualScripting;
+using UnityEngine;
 
 namespace Unity.FPS.AI
 {
@@ -28,10 +30,19 @@ namespace Unity.FPS.AI
         public AudioClip moveSound;
         public MinMaxFloat pitchMovementSpeed;          // 이동 속도에 따른 재생 속도 min, max 설정값
 
+        // 디텍팅
+        public ParticleSystem[] onDetectedVfx;
+        public AudioClip onDetectedSfx;
+
+        // 공격
+        // 공격 상태에서 얼마만큼 목표에 이동하는 설정값
+        [Range(0f, 1f)]
+        public float attackStopDistanceRatio = 0.5f;
+
         // 애니메이션 파라미터 값
         const string k_AnimAttackParameter = "Attack";
         const string k_AnimMoveSpeedParameter = "MoveSpeed";
-        const string k_AnimAlertParameter = "Alerted";
+        const string k_AnimAlertedParameter = "Alerted";
         const string k_AnimOnDamagedParameter = "OnDamaged";
         const string k_AnimOnDeathParameter = "Death";
         #endregion
@@ -68,6 +79,7 @@ namespace Unity.FPS.AI
         {
             // 적 상태 구현
             UpdateCurrentAiState();
+            UpdateAiStateTransition();
 
             // 이동 속도에 따른 애니, 사운드 재생 속도 설정
             float moveSpeed = enemyController.Agent.velocity.magnitude;
@@ -87,9 +99,50 @@ namespace Unity.FPS.AI
                     break;
 
                 case AIState.Follow:
+                    enemyController.SetNavDestination(enemyController.KnownDetectedTarget.transform.position);      // Agent가 타깃을 이동 목표로 설정한다
+                    enemyController.OrientTowards(enemyController.KnownDetectedTarget.transform.position);          // Agent가 타깃을 향해 바라본다
+                    enemyController.OrientWeaponsTowards(enemyController.KnownDetectedTarget.transform.position);   // 목표를 향해 총구를 돌린다
                     break;
 
                 case AIState.Attack:
+                    if(Vector3.Distance(enemyController.KnownDetectedTarget.transform.position, enemyController.detectionModule.detectionSourcePoint.position)
+                        >= attackStopDistanceRatio * enemyController.detectionModule.attackRange)
+                    {
+                        // Agent가 타깃을 이동 목표로 설정
+                        enemyController.SetNavDestination(enemyController.KnownDetectedTarget.transform.position);
+                    }
+                    else
+                    {
+                        // Agent의 이동 목표를 자신의 위치로 하여 이동을 멈춘다
+                        enemyController.SetNavDestination(transform.position);
+                    }
+
+                    // 총구를 타깃을 향해 돌린다
+                    enemyController.OrientWeaponsTowards(enemyController.KnownDetectedTarget.transform.position);
+
+                    // 타깃을 향해 공격
+                    enemyController.TryAttack(enemyController.KnownDetectedTarget.transform.position);
+                    break;
+            }
+        }
+
+        // 상태 변환
+        private void UpdateAiStateTransition()
+        {
+            switch (aiState)
+            {
+                case AIState.Follow:
+                    if(enemyController.IsSeeingTarget && enemyController.IsTargetInAttackRange)
+                    {
+                        aiState = AIState.Attack;
+                    }
+                    break;
+
+                case AIState.Attack:
+                    if(enemyController.IsTargetInAttackRange == false)
+                    {
+                        aiState = AIState.Follow;
+                    }
                     break;
             }
         }
@@ -111,12 +164,42 @@ namespace Unity.FPS.AI
         // 적을 찾으면 호출되는 함수
         private void OnDetectedTarget()
         {
-            Debug.Log("적을 찾았다 - 추격 시작");
+            // 상태 변경
+            if(aiState == AIState.Patrol)
+            {
+                aiState = AIState.Follow;
+            }
+            // 연출 효과 : Vfx
+            for (int i = 0; i < onDetectedVfx.Length; i++)
+            {
+                onDetectedVfx[i].Play();
+            }
+            // Sfx
+            if (onDetectedSfx)
+            {
+                AudioUtility.CreateSFX(onDetectedSfx, transform.position, 1f);
+            }
+
+            // 애니 설정
+            animator.SetBool(k_AnimAlertedParameter, true);
         }
 
+        // 적을 잃어버리면 호출되는 함수
         private void OnLostTarget()
         {
-            Debug.Log("적을 잃어버렸다 - 패트롤로 다시 가기");
+            // 자동 변경
+            if(aiState == AIState.Follow || aiState == AIState.Attack)
+            {
+                aiState = AIState.Patrol;
+            }
+            // 연출 효과 : Vfx
+            for (int i = 0; i < onDetectedVfx.Length; i++)
+            {
+                onDetectedVfx[i].Stop();
+            }
+
+            // 애니 설정
+            animator.SetBool(k_AnimAlertedParameter, false);
         }
         #endregion
     }

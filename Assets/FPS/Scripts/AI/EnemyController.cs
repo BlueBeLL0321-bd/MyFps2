@@ -31,6 +31,8 @@ namespace Unity.FPS.AI
         private Actor actor;
         private Collider[] selfColliders;
 
+        private EnemyManager enemyManager;
+
         public GameObject deathVfxPrefab;
         public Transform deathVfxSpawnPosition;
 
@@ -72,6 +74,22 @@ namespace Unity.FPS.AI
         public UnityAction onDetectedTarget;
         // 적을 잃어버리는 순간 등록된 함수 호출하는 이벤트 함수
         public UnityAction onLostTarget;
+
+        // 방향 전환 회전 속도
+        [SerializeField]
+        private float orientSpeed = 10f;
+
+        // 공격, 무기
+        public bool swapToNextWeapon = false;                           // 무기 교체
+        public float delayAfterWeaponSwap = 0f;                         // 무기 교체 후 딜레이
+        private float lastTimeWeaponSwapped = Mathf.NegativeInfinity;   // 무기 교체 시간
+
+        private WeaponController[] weapons;                             // 가지고 있는 무기 리스트
+        private WeaponController currentWeapon;                         // 현재 사용하고 있는 무기
+        private int currentWeaponIndex;                                 // 현재 사용하고 있는 무기의 인덱스 번호
+
+        // 공격 시 등록되어 있는 함수 호출
+        public UnityAction onAttack;
         #endregion
 
         #region Property
@@ -85,6 +103,7 @@ namespace Unity.FPS.AI
         public GameObject KnownDetectedTarget => detectionModule.KnownDetectedTarget;
         public bool HadKnownTarget => detectionModule.HadKnownTarget;
         public bool IsSeeingTarget => detectionModule.IsSeeingTarget;
+        public bool IsTargetInAttackRange => detectionModule.IsTargetInAttackRange;
         #endregion
 
         #region Unity Event Method
@@ -99,10 +118,15 @@ namespace Unity.FPS.AI
 
             var detectionModules = GetComponentsInChildren<DetectionModule>();
             detectionModule = detectionModules[0];
+
+            enemyManager = FindFirstObjectByType<EnemyManager>();
         }
 
         private void Start()
         {
+            // Enemy 등록
+            enemyManager.RegisterEnemy(this);
+
             // 초기화
             pathDestinationNodeIndex = 0;
 
@@ -113,6 +137,14 @@ namespace Unity.FPS.AI
             // detectionModule 이벤트 함수 등록
             detectionModule.onDetectedTarget += OnDetectedTarget;
             detectionModule.onLostTarget += OnLostTarget;
+
+            // onAttack 이벤트 함수 등록
+            onAttack += detectionModule.OnAttack;
+
+            // 무기 초기화
+            FindAndInitializeAllWeapons();
+            var weapon = GetCurrentWeapon();
+            weapon.ShowWeapon(true);
 
             // body Material 가져오기
             foreach (var renderer in GetComponentsInChildren<Renderer>(true))
@@ -174,6 +206,9 @@ namespace Unity.FPS.AI
         {
             if (damageSource && !damageSource.GetComponent<EnemyController>())
             {
+                //
+                detectionModule.OnDamaged(damageSource);
+
                 // onDamage에 등록되어 있는 함수 호출
                 onDamaged?.Invoke();
 
@@ -196,7 +231,8 @@ namespace Unity.FPS.AI
             GameObject effectGo = Instantiate(deathVfxPrefab, deathVfxSpawnPosition.position, Quaternion.identity);
             Destroy(effectGo, 5f);
 
-            // ...
+            // Enemy 리스트 제거
+            enemyManager.UnregisterEnemy(this);
         }
 
         // 패트롤 path 유효 여부 체크
@@ -307,6 +343,105 @@ namespace Unity.FPS.AI
                 eyeColorMaterialPropertyBlock.SetColor("_EmissionColor", defaultEyeColor);
                 eyeRendererData.renderer.SetPropertyBlock(eyeColorMaterialPropertyBlock, eyeRendererData.materialIndex);
             }
+        }
+
+        // 적을 향해 바라본다
+        public void OrientTowards(Vector3 lookPosition)
+        {
+            Vector3 lookDirection = Vector3.ProjectOnPlane(lookPosition - transform.position, Vector3.up).normalized;
+            if(lookDirection.sqrMagnitude != 0f)
+            {
+                Quaternion targetRotation = Quaternion.LookRotation(lookDirection);
+                transform.rotation = Quaternion.Slerp(transform.rotation, targetRotation, Time.deltaTime * orientSpeed);
+            }
+        }
+
+        // 가지고 있는 무기를 모두 찾아 무기 설정하기
+        private void FindAndInitializeAllWeapons()
+        {
+            if (weapons != null)
+                return;
+
+            weapons = this.GetComponentsInChildren<WeaponController>();
+
+            for (int i = 0; i < weapons.Length; i++)
+            {
+                weapons[i].Owner = this.gameObject;
+            }
+        }
+
+        // 지정한 인덱스의 무기를 액티브로 설정
+        private void SetCurrentWeapon(int index)
+        {
+            // 인덱스 체크
+            if (index < 0 || index >= weapons.Length)
+                return;
+
+            currentWeaponIndex = index;
+            currentWeapon = weapons[currentWeaponIndex];
+
+            if(swapToNextWeapon)
+            {
+                lastTimeWeaponSwapped = Time.time;
+            }
+            else
+            {
+                lastTimeWeaponSwapped = Mathf.NegativeInfinity;
+            }
+        }
+
+        // Current Weapon(액티브 무기) 가져오기
+        public WeaponController GetCurrentWeapon()
+        {
+            FindAndInitializeAllWeapons();
+            if(currentWeapon == null)
+            {
+                // 무기 리스트 중 첫 번째 무기를 액티브로 설정
+                SetCurrentWeapon(0);
+            }
+
+            return currentWeapon;
+        }
+
+        // 적을 향해 총구를 돌린다
+        public void OrientWeaponsTowards(Vector3 lookPosition)
+        {
+            for (int i = 0; i < weapons.Length; i++)
+            {
+                Vector3 weaponForward = (lookPosition - weapons[i].transform.position).normalized;
+                weapons[i].transform.forward = weaponForward;
+            }
+        }
+
+        // 총을 쏜다
+        public bool TryAttack(Vector3 targetPosition)
+        {
+            // 총구를 타깃을 향해 돌린다
+            OrientWeaponsTowards(targetPosition);
+
+            // 딜레이 시간 체크
+            if(lastTimeWeaponSwapped + delayAfterWeaponSwap >= Time.time)
+            {
+                return false;
+            }
+
+            var weapon = GetCurrentWeapon();
+            // Auto Shooting
+            bool didFire = weapon.HandleShootInput(false, true, false);
+
+            if(didFire)
+            {
+                onAttack?.Invoke();
+
+                // 발사를 한 번 할 때마다 다음 무기로 교체
+                if(swapToNextWeapon && weapons.Length > 1)
+                {
+                    int newWeaponIndex = (currentWeaponIndex + 1) % weapons.Length;
+                    SetCurrentWeapon(newWeaponIndex);
+                }
+            }
+
+            return didFire;
         }
         #endregion
     }

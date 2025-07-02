@@ -323,7 +323,7 @@ namespace Unity.FPS.Gameplay
                 m_WeaponBobLocalPosition.x = hBobValue;
                 m_WeaponBobLocalPosition.y = vBobValue;
 
-                //
+                // 플레이어의 최종 위치 저장
                 m_LastCharacterPosition = playerCharacterController.transform.position;
             }
         }
