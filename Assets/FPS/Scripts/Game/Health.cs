@@ -25,6 +25,8 @@ namespace Unity.FPS.Game
 
         // 무적 체크
         public bool Invincible { get; set; }
+
+        public float CriticalHealthRatio => criticalHealthRatio;
         #endregion
 
         #region Unity Event Method

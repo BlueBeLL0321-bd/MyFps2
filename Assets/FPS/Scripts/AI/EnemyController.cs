@@ -429,7 +429,7 @@ namespace Unity.FPS.AI
             // Auto Shooting
             bool didFire = weapon.HandleShootInput(false, true, false);
 
-            if(didFire)
+            if(didFire && onAttack != null)
             {
                 onAttack?.Invoke();
 
@@ -446,4 +446,3 @@ namespace Unity.FPS.AI
         #endregion
     }
 }
-

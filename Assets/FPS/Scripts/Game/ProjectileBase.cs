@@ -35,5 +35,3 @@ namespace Unity.FPS.Game
         #endregion
     }
 }
-
-

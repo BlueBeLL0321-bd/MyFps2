@@ -10,10 +10,11 @@ namespace Unity.FPS.AI
     {
         Patrol,
         Follow,
-        Attack
+        Attack,
+        Ready
     }
 
-    // Enemy 상태를 구현하는 클래스
+    // 이동하는 Enemy 상태를 구현하는 클래스
     [RequireComponent(typeof(EnemyController))]
     public class EnemyMobile : MonoBehaviour
     {
@@ -73,6 +74,7 @@ namespace Unity.FPS.AI
             enemyController.onDamaged += OnDamaged;
             enemyController.onDetectedTarget += OnDetectedTarget;
             enemyController.onLostTarget += OnLostTarget;
+
         }
 
         private void Update()
@@ -116,7 +118,6 @@ namespace Unity.FPS.AI
                         // Agent의 이동 목표를 자신의 위치로 하여 이동을 멈춘다
                         enemyController.SetNavDestination(transform.position);
                     }
-
                     // 총구를 타깃을 향해 돌린다
                     enemyController.OrientWeaponsTowards(enemyController.KnownDetectedTarget.transform.position);
 
@@ -126,7 +127,7 @@ namespace Unity.FPS.AI
             }
         }
 
-        // 상태 변환
+        // 상태 변경
         private void UpdateAiStateTransition()
         {
             switch (aiState)
@@ -147,7 +148,7 @@ namespace Unity.FPS.AI
             }
         }
 
-        // 대미지를 입으면 Hit Spark를 랜덤하게 하나 플레이
+        // 대미지를 입으면 Hit Spark를 랜덤하게 하나 플레이, 애니메이션 처리
         private void OnDamaged()
         {
             // 파티클 플레이
@@ -164,11 +165,13 @@ namespace Unity.FPS.AI
         // 적을 찾으면 호출되는 함수
         private void OnDetectedTarget()
         {
+            Debug.Log("적을 찾았다 - 추격 시작");
             // 상태 변경
             if(aiState == AIState.Patrol)
             {
                 aiState = AIState.Follow;
             }
+
             // 연출 효과 : Vfx
             for (int i = 0; i < onDetectedVfx.Length; i++)
             {
@@ -187,11 +190,13 @@ namespace Unity.FPS.AI
         // 적을 잃어버리면 호출되는 함수
         private void OnLostTarget()
         {
+            Debug.Log("적을 잃어버렸다 - 패트롤로 다시 가기");
             // 자동 변경
-            if(aiState == AIState.Follow || aiState == AIState.Attack)
+            if (aiState == AIState.Follow || aiState == AIState.Attack)
             {
                 aiState = AIState.Patrol;
             }
+
             // 연출 효과 : Vfx
             for (int i = 0; i < onDetectedVfx.Length; i++)
             {
@@ -204,4 +209,3 @@ namespace Unity.FPS.AI
         #endregion
     }
 }
-

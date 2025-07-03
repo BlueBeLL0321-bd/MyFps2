@@ -9,9 +9,9 @@ GameObject:
   serializedVersion: 6
   m_Component:
   - component: {fileID: 3659995153115176982}
-  - component: {fileID: 8070909311331882241}
+  - component: {fileID: 1414010003251289135}
   m_Layer: 0
-  m_Name: Projectile_Hoverbot
+  m_Name: Projectile_Turret
   m_TagString: Untagged
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
@@ -33,7 +33,7 @@ Transform:
   - {fileID: 8402172112652589804}
   m_Father: {fileID: 0}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
---- !u!114 &8070909311331882241
+--- !u!114 &1414010003251289135
 MonoBehaviour:
   m_ObjectHideFlags: 0
   m_CorrespondingSourceObject: {fileID: 0}
@@ -46,7 +46,7 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: 
   maxLifeTime: 5
-  speed: 100
+  speed: 20
   gravityDown: 0
   root: {fileID: 3659995153115176982}
   tip: {fileID: 1135791333161367127}
@@ -56,7 +56,7 @@ MonoBehaviour:
     m_Bits: 4294967295
   impactVfxPrefab: {fileID: 0}
   impactSfxClip: {fileID: 0}
-  damage: 20
+  damage: 30
 --- !u!1 &5564024855854763701
 GameObject:
   m_ObjectHideFlags: 0

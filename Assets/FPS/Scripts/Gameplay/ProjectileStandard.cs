@@ -110,6 +110,7 @@ namespace Unity.FPS.Gameplay
         #region Custom Method
         private new void OnShoot()
         {
+            // 초기화
             velocity = transform.forward * speed;
             transform.position += projectileBase.InheritedMuzzleVelocity * Time.deltaTime;  // 총구 속도 적용
 
@@ -120,7 +121,7 @@ namespace Unity.FPS.Gameplay
             Collider[] ownerColliders = projectileBase.Owner.GetComponentsInChildren<Collider>();
             ignoredColliders.AddRange(ownerColliders);
 
-            // 쏘는 순간 벽 체크하여 벽 뚫는 버그 수정
+            // 쏘는 순간 벽(충돌체) 체크하여 벽 뚫는 버그 수정
             PlayerWeaponManager playerWeaponManager = projectileBase.Owner.GetComponent<PlayerWeaponManager>();
             if (playerWeaponManager)
             {
@@ -178,6 +179,7 @@ namespace Unity.FPS.Gameplay
                 }
             }
 
+
             // VFX
             if (impactVfxPrefab)
             {
@@ -199,6 +201,6 @@ namespace Unity.FPS.Gameplay
             Destroy(gameObject);
         }
         #endregion
+
     }
 }
-
